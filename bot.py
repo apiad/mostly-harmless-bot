@@ -91,7 +91,7 @@ Send /help for detailed instructions.""",
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="""
+        text=f"""
 Welcome to {BLOG_NAME}.
 
 I can help you search for posts and read them right here in Telegram, as well as unlock
@@ -230,7 +230,7 @@ async def unlock_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(update.effective_chat.id, text="No matching posts.")
         return
 
-    for path, item in locked.items():
+    for path, item in items:
         title = item['title']
         description = item['subtitle']
         # select a payload just for you to recognize its the donation from your bot
