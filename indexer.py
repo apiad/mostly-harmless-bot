@@ -1,3 +1,4 @@
+import json
 import os
 import datetime
 import sys
@@ -8,7 +9,6 @@ from bs4 import BeautifulSoup
 
 from whoosh.index import create_in, open_dir, Index
 from whoosh.writing import IndexWriter
-from whoosh.searching import Searcher
 from whoosh.fields import TEXT, DATETIME, ID, Schema
 
 
@@ -20,7 +20,12 @@ def initialize():
     if os.path.exists("data/.created"):
         return open_dir("data")
 
-    schema = Schema(path=ID(unique=True, stored=True), title=TEXT(stored=True), subtitle=TEXT(stored=True), content=TEXT)
+    schema = Schema(
+        path=ID(unique=True, stored=True),
+        title=TEXT(stored=True),
+        subtitle=TEXT(stored=True),
+        content=TEXT,
+    )
     index = create_in("data", schema)
 
     with open("data/.created", "w") as fp:
@@ -33,18 +38,28 @@ def download(index: Index):
     print(f"Downloading {BLOG_FEED}")
     soup = BeautifulSoup(requests.get(BLOG_FEED).content, "xml")
     print("Feed downloaded, indexing...")
+    items = []
 
     try:
         writer: IndexWriter = index.writer()
 
         for item in soup.channel.find_all("item"):
-            content = BeautifulSoup(item.find("content:encoded").get_text(), "html").get_text()
-            data = dict(path=item.link.string, title=item.title.string, subtitle=item.description.string)
+            content = BeautifulSoup(
+                item.find("content:encoded").get_text(), "html"
+            ).get_text()
+            data = dict(
+                path=str(item.link.string),
+                title=str(item.title.string),
+                subtitle=str(item.description.string),
+            )
             print(data)
+            items.append(dict(**data))
 
-            data['content'] = content
-            writer.update_document(**{ k:str(v) for k,v in data.items() })
+            data["content"] = str(content)
+            writer.update_document(**data)
 
+            with open("data/items.json", "w") as fp:
+                json.dump(dict(items=items), fp, indent=4)
     finally:
         writer.commit()
 
