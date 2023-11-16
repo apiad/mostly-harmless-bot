@@ -73,6 +73,8 @@ def remove_notify(user_id):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    _register_user(update)
+
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=f"""
@@ -88,7 +90,15 @@ Send /help for detailed instructions.""",
         await unlock_post(update, context)
 
 
+def _register_user(update):
+    users = load_config().get('users', [])
+    users.append(update.effective_user.id)
+    update_config(users = list(set(users)))
+
+
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    _register_user(update)
+
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=f"""
@@ -109,6 +119,8 @@ Send /unlock to see a list of premium posts that you can buy individually.
 
 
 async def notify(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    _register_user(update)
+
     user_id = update.effective_user.id
     add_notify(user_id)
     await context.bot.send_message(
@@ -130,6 +142,8 @@ async def mute(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    _register_user(update)
+
     query = QueryParser("content", index.schema).parse(" ".join(context.args))
     response = []
 
@@ -155,6 +169,8 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    _register_user(update)
+
     response = []
 
     with open("data/items.json") as fp:
@@ -180,6 +196,8 @@ async def latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def random_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    _register_user(update)
+
     with open("data/items.json") as fp:
         items = json.load(fp)
 
@@ -215,6 +233,8 @@ async def lock_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def unlock_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    _register_user(update)
+
     with open("data/items.json") as fp:
         all_items = json.load(fp)
 
@@ -282,6 +302,35 @@ You can read the full post [here]({item['secret']}).
 """, parse_mode="markdown")
 
 
+## ADMIN
+
+
+async def config(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    await context.bot.send_document(update.effective_chat.id, "config.json")
+
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    message = update.effective_message.reply_to_message
+    config = load_config()
+
+    if context.args:
+        if context.args[1] == "all":
+            users = config['users']
+        else:
+            users = [int(u) for u in context.args]
+    else:
+        users = config['notifications']
+
+    for user in users:
+        await message.copy(chat_id=user)
+
+
 ## MAIN
 
 
@@ -290,6 +339,8 @@ def main():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help))
+    application.add_handler(CommandHandler("broadcast", broadcast))
+    application.add_handler(CommandHandler("config", config))
     application.add_handler(CommandHandler("notify", notify))
     application.add_handler(CommandHandler("mute", mute))
     application.add_handler(CommandHandler("search", search))
