@@ -215,26 +215,29 @@ async def lock_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def unlock_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    with open("data/items.json") as fp:
+        all_items = json.load(fp)
+
     config = load_config()
     locked = config.get("locked", {})
-    items = locked.items()
+    locked_items = [path for path in locked if path in all_items]
 
     if context.args:
-        items = [item for item in items if item[0].endswith(context.args[0])]
+        locked_items = [path for path in locked_items if path.endswith(context.args[0])]
 
-    if not items:
+    if not locked_items:
         await context.bot.send_message(update.effective_chat.id, text="No matching posts.")
         return
 
-    for path, item in items:
-        title = item['title']
-        description = item['subtitle']
+    for path in locked_items:
+        title = all_items[path]['title']
+        description = all_items[path]['subtitle']
         # select a payload just for you to recognize its the donation from your bot
         payload = path
         # In order to get a provider_token see https://core.telegram.org/bots/payments#getting-a-token
         currency = "USD"
         # price in dollars
-        prices = [LabeledPrice(f"Unlock post", item['price'])]
+        prices = [LabeledPrice(f"Unlock post", locked[path]['price'])]
 
         # optionally pass need_name=True, need_phone_number=True,
         # need_email=True, need_shipping_address=True, is_flexible=True
@@ -273,7 +276,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     item = locked[path]
 
     await update.effective_message.reply_text(f"""
-Thank you for buying **{item['title']}**!
+Thank you for your purchase!
 
 You can read the full post [here]({item['secret']}).
 """, parse_mode="markdown")
