@@ -2,6 +2,7 @@ import json
 import os
 import datetime
 import sys
+import csv
 import time
 import requests
 from dotenv import load_dotenv
@@ -14,6 +15,7 @@ from whoosh.fields import TEXT, DATETIME, ID, Schema
 
 load_dotenv()
 BLOG_FEED = os.getenv("BLOG_FEED")
+BLOG_PATH_PREFIX = os.getenv("BLOG_PATH_PREFIX")
 
 
 def initialize():
@@ -34,18 +36,58 @@ def initialize():
     return index
 
 
-def download(index: Index):
+def import_local(index: Index):
+    if not os.path.exists("data/posts.csv"):
+        return
+
+    items = []
+
+    try:
+        writer: IndexWriter = index.writer()
+
+        with open("data/posts.csv") as fp:
+            for i,row in enumerate(csv.reader(fp)):
+                if i == 0:
+                    continue
+
+                fname, *_, title, subtitle, _ = row
+
+                if not title:
+                    continue
+
+                with open("data/posts/%s.html" % fname) as fp:
+                    soup = BeautifulSoup(fp.read(), "html")
+                    content = soup.get_text("\n")
+
+                data = dict(
+                    path=BLOG_PATH_PREFIX + fname.split(".")[1],
+                    title=title,
+                    subtitle=subtitle,
+                )
+                print(data)
+                items.append(dict(**data))
+
+                data["content"] = str(content)
+                writer.update_document(**data)
+
+        return items
+
+    finally:
+        writer.commit()
+
+
+
+def download(index: Index, items):
     print(f"Downloading {BLOG_FEED}")
     soup = BeautifulSoup(requests.get(BLOG_FEED).content, "xml")
     print("Feed downloaded, indexing...")
-    items = []
 
     try:
         writer: IndexWriter = index.writer()
 
         for item in soup.channel.find_all("item"):
             content = BeautifulSoup(
-                item.find("content:encoded").get_text(), "html"
+                item.find("content:encoded").get_text("\n"), "html"
             ).get_text()
             data = dict(
                 path=str(item.link.string),
@@ -58,8 +100,6 @@ def download(index: Index):
             data["content"] = str(content)
             writer.update_document(**data)
 
-            with open("data/items.json", "w") as fp:
-                json.dump(dict(items=items), fp, indent=4)
     finally:
         writer.commit()
 
@@ -67,8 +107,13 @@ def download(index: Index):
 if __name__ == "__main__":
     index = initialize()
 
+    items = import_local(index)
+
     while True:
-        download(index)
+        download(index, items)
+
+        with open("data/items.json", "w") as fp:
+            json.dump(dict(items=items), fp, indent=4)
 
         if len(sys.argv) > 1:
             time.sleep(int(sys.argv[1]))
