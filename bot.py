@@ -86,14 +86,16 @@ Send /help for detailed instructions.""",
     )
 
     if context.args:
-        await context.bot.send_message(update.effective_chat.id, text="Looking for post to unlock.")
+        await context.bot.send_message(
+            update.effective_chat.id, text="Looking for post to unlock."
+        )
         await unlock_post(update, context)
 
 
 def _register_user(update):
-    users = load_config().get('users', [])
+    users = load_config().get("users", [])
     users.append(update.effective_user.id)
-    update_config(users = list(set(users)))
+    update_config(users=list(set(users)))
 
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -155,7 +157,7 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not response:
         await context.bot.send_message(
-           update.effective_chat.id,
+            update.effective_chat.id,
             text="No relevant articles found.",
         )
         return
@@ -175,14 +177,14 @@ async def latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     with open("data/items.json") as fp:
         items = json.load(fp).values()
-        items = sorted(items, key=lambda i: i['date'], reverse=True)
+        items = sorted(items, key=lambda i: i["date"], reverse=True)
 
         for r in items[:10]:
             response.append(f"**[{r['title']}]({r['path']}):** {r['subtitle']}")
 
     if not response:
         await context.bot.send_message(
-           update.effective_chat.id,
+            update.effective_chat.id,
             text="No articles found.",
         )
         return
@@ -223,7 +225,7 @@ async def lock_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     config = load_config()
     locked = config.get("locked", {})
     locked[public] = dict(secret=secret, price=price)
-    update_config(locked = locked)
+    update_config(locked=locked)
 
     await context.bot.send_message(
         update.effective_chat.id,
@@ -246,18 +248,20 @@ async def unlock_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
         locked_items = [path for path in locked_items if path.endswith(context.args[0])]
 
     if not locked_items:
-        await context.bot.send_message(update.effective_chat.id, text="No matching posts.")
+        await context.bot.send_message(
+            update.effective_chat.id, text="No matching posts."
+        )
         return
 
     for path in locked_items:
-        title = all_items[path]['title']
-        description = all_items[path]['subtitle']
+        title = all_items[path]["title"]
+        description = all_items[path]["subtitle"]
         # select a payload just for you to recognize its the donation from your bot
         payload = path
         # In order to get a provider_token see https://core.telegram.org/bots/payments#getting-a-token
         currency = "USD"
         # price in dollars
-        prices = [LabeledPrice(f"Unlock post", locked[path]['price'])]
+        prices = [LabeledPrice(f"Unlock post", locked[path]["price"])]
 
         # optionally pass need_name=True, need_phone_number=True,
         # need_email=True, need_shipping_address=True, is_flexible=True
@@ -268,12 +272,14 @@ async def unlock_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
             payload,
             PAYMENT_TOKEN,
             currency,
-            prices
+            prices,
         )
 
 
 # after (optional) shipping, it's the pre-checkout
-async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def precheckout_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     """Answers the PreQecheckoutQuery"""
     query = update.pre_checkout_query
     config = load_config()
@@ -287,7 +293,9 @@ async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.answer(ok=True)
 
 
-async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def successful_payment_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     """Confirms the successful payment."""
     # do something after successfully receiving payment?
     config = load_config()
@@ -295,11 +303,14 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     path = update.effective_message.successful_payment.invoice_payload
     item = locked[path]
 
-    await update.effective_message.reply_text(f"""
+    await update.effective_message.reply_text(
+        f"""
 Thank you for your purchase!
 
 You can read the full post [here]({item['secret']}).
-""", parse_mode="markdown")
+""",
+        parse_mode="markdown",
+    )
 
 
 ## ADMIN
@@ -321,14 +332,18 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if context.args:
         if context.args[1] == "all":
-            users = config['users']
+            users = config["users"]
         else:
             users = [int(u) for u in context.args]
     else:
-        users = config['notifications']
+        users = config["notifications"]
 
     for user in users:
         await message.copy(chat_id=user)
+
+    await context.bot.send_message(
+        update.effective_chat.id, f"Notified {len(users)} users."
+    )
 
 
 ## MAIN
