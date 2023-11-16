@@ -111,6 +111,7 @@ if __name__ == "__main__":
 
     while True:
         download(index, items)
+        items = list(set(items))
 
         with open("data/items.json", "w") as fp:
             json.dump(dict(items=items), fp, indent=4)
