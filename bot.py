@@ -158,9 +158,10 @@ async def latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = []
 
     with open("data/items.json") as fp:
-        items = json.load(fp)['items'][:10]
+        items = json.load(fp).values()
+        items = sorted(items, key=lambda i: i['date'], reverse=True)
 
-        for r in items:
+        for r in items[:10]:
             response.append(f"**[{r['title']}]({r['path']}):** {r['subtitle']}")
 
     if not response:
@@ -180,9 +181,9 @@ async def latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def random_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with open("data/items.json") as fp:
-        items = json.load(fp)['items']
+        items = json.load(fp)
 
-    post = random.choice(items)
+    post = items[random.choice(list(items))]
 
     await context.bot.send_message(
         update.effective_chat.id,
@@ -198,22 +199,17 @@ async def lock_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
 
-    with open("data/items.json") as fp:
-        items: list = json.load(fp)['items']
-
     public, secret, price = context.args
     price = int(price)
-    item = [item for item in items if item['path'] == public][0]
-    title, subtitle = item['title'], item['subtitle']
 
     config = load_config()
     locked = config.get("locked", {})
-    locked[public] = dict(secret=secret, price=price, title=title, subtitle=subtitle)
+    locked[public] = dict(secret=secret, price=price)
     update_config(locked = locked)
 
     await context.bot.send_message(
         update.effective_chat.id,
-        text=f"**{title}** has been locked.",
+        text=f"**{public}** has been locked.",
         parse_mode="markdown",
     )
 

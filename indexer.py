@@ -19,28 +19,21 @@ BLOG_PATH_PREFIX = os.getenv("BLOG_PATH_PREFIX")
 
 
 def initialize():
-    if os.path.exists("data/.created"):
-        return open_dir("data")
-
     schema = Schema(
         path=ID(unique=True, stored=True),
         title=TEXT(stored=True),
         subtitle=TEXT(stored=True),
+        date=TEXT(stored=True),
         content=TEXT,
     )
-    index = create_in("data", schema)
-
-    with open("data/.created", "w") as fp:
-        fp.write(str(datetime.datetime.today()))
-
-    return index
+    return create_in("data", schema)
 
 
 def import_local(index: Index):
     if not os.path.exists("data/posts.csv"):
         return
 
-    items = []
+    items = {}
 
     try:
         writer: IndexWriter = index.writer()
@@ -50,7 +43,7 @@ def import_local(index: Index):
                 if i == 0:
                     continue
 
-                fname, *_, title, subtitle, _ = row
+                fname, date, *_, title, subtitle, _ = row
 
                 if not title:
                     continue
@@ -63,9 +56,10 @@ def import_local(index: Index):
                     path=BLOG_PATH_PREFIX + fname.split(".")[1],
                     title=title,
                     subtitle=subtitle,
+                    date=date.split(".")[0],
                 )
                 print(data)
-                items.append(dict(**data))
+                items[data['path']] = dict(**data)
 
                 data["content"] = str(content)
                 writer.update_document(**data)
@@ -93,9 +87,12 @@ def download(index: Index, items):
                 path=str(item.link.string),
                 title=str(item.title.string),
                 subtitle=str(item.description.string),
+                # Thu, 16 Nov 2023 00:34:08 GMT
+                #  %a, %d %b  %Y   %H:%M:%S GMT
+                date=datetime.datetime.strptime(str(item.pubDate.string), r"%a, %d %b %Y %H:%M:%S GMT").strftime("%Y-%m-%dT%H:%M:%S"),
             )
             print(data)
-            items.append(dict(**data))
+            items[data['path']] = dict(**data)
 
             data["content"] = str(content)
             writer.update_document(**data)
@@ -111,10 +108,9 @@ if __name__ == "__main__":
 
     while True:
         download(index, items)
-        items = list(set(items))
 
         with open("data/items.json", "w") as fp:
-            json.dump(dict(items=items), fp, indent=4)
+            json.dump(items, fp, indent=4)
 
         if len(sys.argv) > 1:
             time.sleep(int(sys.argv[1]))
