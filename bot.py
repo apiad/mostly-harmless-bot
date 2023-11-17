@@ -88,8 +88,8 @@ Send /help for detailed instructions.""",
     )
 
     if context.args:
-        if context.args[0].startswith("donate+"):
-            amount = int(context.args[0].split("+")[1])
+        if context.args[0].startswith("donate_"):
+            amount = int(context.args[0].split("_")[1])
             await _donate(update, context, amount)
         else:
             await unlock_post(update, context)
