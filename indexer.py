@@ -24,6 +24,7 @@ def initialize():
         title=TEXT(stored=True),
         subtitle=TEXT(stored=True),
         date=TEXT(stored=True),
+        image_url=TEXT(stored=True),
         content=TEXT,
     )
     return create_in("data", schema)
@@ -51,12 +52,14 @@ def import_local(index: Index):
                 with open("data/posts/%s.html" % fname) as fp:
                     soup = BeautifulSoup(fp.read(), "html")
                     content = soup.get_text("\n")
+                    img = soup.find('img')
 
                 data = dict(
                     path=BLOG_PATH_PREFIX + fname.split(".")[1],
                     title=title,
                     subtitle=subtitle,
                     date=date.split(".")[0],
+                    image_url=img.attrs['src'] if img is not None else "",
                 )
                 print(data)
                 items[data['path']] = dict(**data)
@@ -90,6 +93,7 @@ def download(index: Index, items):
                 # Thu, 16 Nov 2023 00:34:08 GMT
                 #  %a, %d %b  %Y   %H:%M:%S GMT
                 date=datetime.datetime.strptime(str(item.pubDate.string), r"%a, %d %b %Y %H:%M:%S GMT").strftime("%Y-%m-%dT%H:%M:%S"),
+                image_url=item.enclosure.attrs['url']
             )
             print(data)
             items[data['path']] = dict(**data)

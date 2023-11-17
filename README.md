@@ -70,11 +70,14 @@ There are a couple unlisted admin commands that only the user with ID equal to `
 
   The `price` is a number in USD cents, e.g., 200 for $2.
 
+- `/list` shows all locked articles and the respective unlock URL.
+
 - `/config` will send you the `config.json` file where you can see all the active users of the bot, and the locked articles.
 
 - `/broadcast` lets you send messages to all or some users. To use it, first write whatever you want to send as a regular message to the bot. Then, reply to that message and type `/broadcast`.
 
     By default this will notify those users who have `/notify` turned on. You can add `all` to notify everyone who's ever interacted with the bot, or specific user IDs to notify only those users.
+
 
 ## License
 

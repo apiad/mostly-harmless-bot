@@ -1,4 +1,6 @@
 import os
+from bs4 import BeautifulSoup
+import requests
 import json
 import logging
 from pathlib import Path
@@ -86,10 +88,11 @@ Send /help for detailed instructions.""",
     )
 
     if context.args:
-        await context.bot.send_message(
-            update.effective_chat.id, text="Looking for post to unlock."
-        )
-        await unlock_post(update, context)
+        if context.args[0].startswith("donate+"):
+            amount = int(context.args[0].split("+")[1])
+            await _donate(update, context, amount)
+        else:
+            await unlock_post(update, context)
 
 
 def _register_user(update):
@@ -106,16 +109,13 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=f"""
 Welcome to {BLOG_NAME}.
 
-I can help you search for posts and read them right here in Telegram, as well as unlock
-premium posts.
+I can help you search for posts and read them right here in Telegram, as well as unlock premium posts.
 
-Send /latest to see the last 10 posts published.
-
-Send /notify to receive a notification here every time a new article is posted (/mute to cancel).
-
-Send /search followed by some text to find for relevant posts related to that text. This is a simple text-based search.
-
-Send /unlock to see a list of premium posts that you can buy individually.
+- Send /latest to see the last 10 posts published.
+- Send /notify to receive a notification here every time a new article is posted (/mute to cancel).
+- Send /search followed by some text to find for relevant posts related to that text. This is a simple text-based search.
+- Send /unlock to see a list of premium posts that you can buy individually.
+- Send /donate to make a donation. You can add any desired amount (default $1).
 """,
     )
 
@@ -212,7 +212,28 @@ async def random_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-## SUBSCRIPTIONS
+## PAYMENT
+
+
+async def donate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.args:
+        amount = int(context.args[0])
+    else:
+        amount = 1
+
+    await _donate(update, context, amount)
+
+
+async def _donate(update: Update, context: ContextTypes.DEFAULT_TYPE, amount: int):
+    await context.bot.send_invoice(
+        update.effective_chat.id,
+        f"Donate ${amount}",
+        f"Send a donation of ${amount}.00 USD.",
+        "donate:%i" % amount,
+        PAYMENT_TOKEN,
+        "USD",
+        prices=[LabeledPrice(f"Donation", amount * 100)],
+    )
 
 
 async def lock_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -232,6 +253,25 @@ async def lock_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=f"**{public}** has been locked.",
         parse_mode="markdown",
     )
+
+
+async def locked(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    config = load_config()
+    locked = config.get("locked", {})
+
+    for item in locked:
+        slug = item.split("/")[-1]
+        await context.bot.send_message(ADMIN_ID, text=f"""
+**Public**: {item}
+**Price:** ${locked[item]['price']/100:.2f}
+**Secret:** {locked[item]['secret']}
+
+**Copy unlock URL**
+`https://t.me/{context.bot.username}?start={slug}`
+""", parse_mode="markdown")
 
 
 async def unlock_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -255,7 +295,8 @@ async def unlock_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for path in locked_items:
         title = all_items[path]["title"]
-        description = all_items[path]["subtitle"]
+        description = f"Unlock this article to read the full version. Original: {path}"
+        image = all_items[path]['image_url']
         # select a payload just for you to recognize its the donation from your bot
         payload = path
         # In order to get a provider_token see https://core.telegram.org/bots/payments#getting-a-token
@@ -273,6 +314,7 @@ async def unlock_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
             PAYMENT_TOKEN,
             currency,
             prices,
+            photo_url=image
         )
 
 
@@ -285,12 +327,17 @@ async def precheckout_callback(
     config = load_config()
     locked = config.get("locked", {})
 
-    # check the payload, is this from your bot?
-    if not query.invoice_payload in locked:
-        # answer False pre_checkout_query
-        await query.answer(ok=False, error_message="Something went wrong...")
-    else:
+    if query.invoice_payload.startswith("donate:"):
         await query.answer(ok=True)
+        return
+
+    # check the payload, is this from your bot?
+    if query.invoice_payload in locked:
+        # answer False pre_checkout_query
+        await query.answer(ok=True)
+        return
+
+    await query.answer(ok=False, error_message="Something went wrong...")
 
 
 async def successful_payment_callback(
@@ -300,17 +347,23 @@ async def successful_payment_callback(
     # do something after successfully receiving payment?
     config = load_config()
     locked = config.get("locked", {})
-    path = update.effective_message.successful_payment.invoice_payload
-    item = locked[path]
+    payload = update.effective_message.successful_payment.invoice_payload
 
-    await update.effective_message.reply_text(
-        f"""
-Thank you for your purchase!
+    if payload in locked:
+        item = locked[payload]
 
-You can read the full post [here]({item['secret']}).
-""",
-        parse_mode="markdown",
-    )
+        await update.effective_message.reply_text(
+            f"""Thank you for your purchase!\n\nYou can read the full post [here]({item['secret']}).""",
+            parse_mode="markdown",
+        )
+
+    if payload.startswith("donate:"):
+        await update.effective_message.reply_text(
+            f"""Thank you for your donation!""",
+            parse_mode="markdown",
+        )
+
+    await context.bot.send_message(ADMIN_ID, text=f"💵 User @{update.effective_user.username or update.effective_user.id} paid {update.effective_message.successful_payment.total_amount} for {update.effective_message.successful_payment.invoice_payload}.")
 
 
 ## ADMIN
@@ -362,7 +415,9 @@ def main():
     application.add_handler(CommandHandler("random", random_post))
     application.add_handler(CommandHandler("latest", latest))
     application.add_handler(CommandHandler("lock", lock_post))
+    application.add_handler(CommandHandler("list", locked))
     application.add_handler(CommandHandler("unlock", unlock_post))
+    application.add_handler(CommandHandler("donate", donate))
     application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     application.add_handler(
         MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback)
