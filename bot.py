@@ -384,7 +384,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     config = load_config()
 
     if context.args:
-        if context.args[1] == "all":
+        if context.args[0] == "all":
             users = config["users"]
         else:
             users = [int(u) for u in context.args]
